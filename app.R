@@ -4,44 +4,39 @@ library(bslib)
 library(dplyr)
 library(lubridate)
 library(duckdb)
+library(leaflet)
 
 # Database connection
-con <- DBI::dbConnect(
-  duckdb::duckdb(), 
-  dbdir = "../rclone-datasus/rclone_logs.duckdb", 
-  read_only = TRUE
-)
+# con <- DBI::dbConnect(
+#   duckdb::duckdb(), 
+#   dbdir = "../rclone-datasus/rclone_logs.duckdb", 
+#   read_only = TRUE
+# )
 
-# Dabatase tables
-logs_tb <- dplyr::tbl(con, "logs")
+# # Dabatase tables
+# logs_tb <- dplyr::tbl(con, "logs")
 
 # Interface
-ui <- page_sidebar(
-  heigth = "100px",
-  title = "Secas",
+ui <- page_navbar(
+  title = "Saúde no Semiárido", 
+  
+  # Sidebar
   sidebar = sidebar(
+    textInput("teste1", label = "Teste 1")
+  ),
+  
+  # Map page
+  nav_panel(
+    title = "Mapa",
     
   ),
-  layout_columns(
-    col_widths = c(5,7),
-    row_heights = c(2, 3),
-    card(
-      card_header("Summary"),
-      card_body(
-        
-      )
-    )
+  nav_panel(
+    title = "Gráficos"
   )
-
 )
 
 # Server
 server <- function(input, output) {
-
-  react_sel <- reactive({
-    
-  })
-
   
 }
 

@@ -32,7 +32,8 @@ names(geo_codnames) <- paste(geo$name_mun, "-", geo$name_uf)
 # Interface
 ui <- page_navbar(
   title = "Saúde no Semiárido", 
-  
+  theme = bs_theme(bootswatch = "flatly"),
+
   # Sidebar
   sidebar = sidebar(
     # Select indicator
@@ -169,7 +170,7 @@ server <- function(input, output, session) {
   # Update map
   observeEvent(geo_data(), {
     if(input$indicator == "Precipitação"){
-      prec_pal <- colorNumeric(
+      prec_pal <- colorQuantile(
         palette = prec_ramp,
         domain = geo_data()$value, 
         n = 10

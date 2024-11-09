@@ -58,7 +58,7 @@ ui <- page_navbar(
       step = 1, 
       value = 6, 
       label = "Mês",
-      sep = ""
+      sep = "", animate = TRUE
     ),
     
     # Select municipality
@@ -127,9 +127,20 @@ server <- function(input, output, session) {
 
   # Map render
   output$out_map <- renderLeaflet(
-    leaflet() |>
-      addTiles() |>
-      addPolygons(data = geo, fill = "", stroke = "")
+    if(input$indicator == "Precipitação"){
+      leaflet() |>
+        addTiles() |>
+        addPolygons(data = geo, fill = "", stroke = "") |>
+          addLegend(
+            layerId = "legend",
+            position = 'topright',
+            colors = c("#2C7BB6","#ABD9E9", "#FFFFBF", "#FDAE61", "#D7191C"),
+            labels = c("muito úmido","úmido",
+                       "seco","muito seco","extremamente seco"), opacity = 0.5,
+            title = "Precipitação"
+          )
+    }
+    
   )
 
   # Update map
@@ -142,22 +153,14 @@ server <- function(input, output, session) {
       )
 
       leafletProxy("out_map", session) |>
-        removeControl("legend") |>
         addPolygons(
           data = geo_data(),
           fillColor = ~prec_pal(value),
-          weight = 0,
+          weight = .5,
+          color = "white",
           fillOpacity = .5, 
           label = ~glue("{name_mun} - {name_uf}: {round(value, 2)} mm"),
           layerId = ~cod_mun
-        ) |>
-        addLegend(
-          layerId = "legend",
-          position = 'topright',
-          colors = c("#2C7BB6","#ABD9E9", "#FFFFBF", "#FDAE61", "#D7191C"),
-          labels = c("muito úmido","úmido",
-                     "seco","muito seco","extremamente seco"), opacity = 0.5,
-          title = "Precipitação"
         )
     }
   })

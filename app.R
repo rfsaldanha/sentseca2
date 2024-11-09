@@ -33,63 +33,65 @@ names(geo_codnames) <- paste(geo$name_mun, "-", geo$name_uf)
 ui <- page_navbar(
   title = "Saúde no Semiárido", 
   theme = bs_theme(bootswatch = "flatly"),
-
-  # Sidebar
-  sidebar = sidebar(
-    # Select indicator
-    selectizeInput(
-      inputId = "indicator", 
-      label = "Indicador de seca",
-      choices = c("Precipitação", "NDVI")
-    ),
-
-    # Select year
-    sliderInput(
-      inputId = "year",
-      min = 2001,
-      max = 2022,
-      step = 1, 
-      value = 2022, 
-      label = "Ano",
-      sep = ""
-    ),
-
-    # Select month
-    sliderInput(
-      inputId = "month",
-      min = 1,
-      max = 12,
-      step = 1, 
-      value = 6, 
-      label = "Mês",
-      sep = "", animate = TRUE
-    ),
-    
-    # Select municipality
-    selectizeInput(
-      inputId = "mun", 
-      label = "Município", 
-      choices = NULL
-    )
-  ),
   
   # Map page
   nav_panel(
     title = "Mapa",
-    card(
-      full_screen = TRUE,
-      card_body(
-        class = "p-0",
-        leafletOutput("out_map")
-      )
-    )
+
+    layout_sidebar(
+      sidebar = sidebar(
+        # Select indicator
+        selectizeInput(
+          inputId = "indicator", 
+          label = "Indicador de seca",
+          choices = c("Precipitação", "NDVI")
+        ),
     
+        # Select year
+        sliderInput(
+          inputId = "year",
+          min = 2001,
+          max = 2022,
+          step = 1, 
+          value = 2022, 
+          label = "Ano",
+          sep = ""
+        ),
+    
+        # Select month
+        sliderInput(
+          inputId = "month",
+          min = 1,
+          max = 12,
+          step = 1, 
+          value = 6, 
+          label = "Mês",
+          sep = "", animate = TRUE
+        ),
+        
+        # Select municipality
+        selectizeInput(
+          inputId = "mun", 
+          label = "Município", 
+          choices = NULL
+        )
+      ),
+
+      card(
+        full_screen = TRUE,
+        card_body(
+          class = "p-0",
+          leafletOutput("out_map")
+        )
+      )
+
+    )
   ),
   nav_panel(
     title = "Gráficos",
-    card(
-      card_header("Saúde"),
-      card_body(
+
+    layout_sidebar(
+      sidebar = sidebar(
         selectInput(
           inputId = "health_indi",
           label = "Indicador",
@@ -99,8 +101,14 @@ ui <- page_navbar(
           inputId = "age_group",
           label = "Faixa etária",
           choices = c("De 0 a 4 anos", "De 5 a 9 anos", "De 10 a 19 anos", "De 20 a 64 anos", "De 65 a 99 anos")
-        ),
-        vchartr::vchartOutput(outputId = "graph_health")
+        )
+      ),
+
+      card(
+        card_header("Saúde"),
+        card_body(
+          vchartr::vchartOutput(outputId = "graph_health")
+        )
       )
     )
   )

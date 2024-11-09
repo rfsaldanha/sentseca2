@@ -25,6 +25,9 @@ health <- readRDS("data/health.rds")
 # Precipication color ramp for map
 prec_ramp <- colorRamp(c("#D7191C", "#FDAE61", "#FFFFBF", "#ABD9E9", "#2C7BB6"), interpolate="spline")
 
+# NDVI color ramp for map
+ndvi_ramp <- colorRamp(c("#d83d40", "#f3fd61", "#35a328"), interpolate="spline")
+
 # Municipality list for selector
 geo_codnames <- geo$cod_mun
 names(geo_codnames) <- paste(geo$name_mun, "-", geo$name_uf)
@@ -33,11 +36,54 @@ names(geo_codnames) <- paste(geo$name_mun, "-", geo$name_uf)
 ui <- page_navbar(
   title = "Saúde no Semiárido", 
   theme = bs_theme(bootswatch = "flatly"),
+
+  # Logo
+  tags$head(
+    tags$script(
+      HTML('$(document).ready(function() {
+             $(".navbar .container-fluid")
+               .append("<img id = \'myImage\' src=\'selo_obs_h.png\' align=\'right\' height = \'57.5px\'>"  );
+            });')),
+    tags$style(
+      HTML('@media (max-width:992px) { #myImage { position: fixed; right: 10%; top: 0.5%; }}')
+    )),
+
+  # Translation
+  tags$script(
+    HTML("
+      $(document).ready(function() {
+        // Change the text 'Expand' in all tooltips
+        $('.card.bslib-card bslib-tooltip > div').each(function() {
+          if ($(this).text().includes('Expand')) {
+            $(this).text('Expandir');
+          }
+        });
   
+        // Use MutationObserver to change the text 'Close'
+        var observer = new MutationObserver(function(mutations) {
+          $('.bslib-full-screen-exit').each(function() {
+            if ($(this).html().includes('Close')) {
+              $(this).html($(this).html().replace('Close', 'Fechar'));
+            }
+          });
+        });
+  
+        // Observe all elements with the class 'card bslib-card'
+        $('.card.bslib-card').each(function() {
+          observer.observe(this, { 
+            attributes: true, 
+            attributeFilter: ['data-full-screen'] 
+          });
+        });
+      });
+    ")
+  ),
+
   # Map page
   nav_panel(
     title = "Mapa",
 
+    # Sidebar
     layout_sidebar(
       sidebar = sidebar(
         # Select indicator
@@ -66,17 +112,12 @@ ui <- page_navbar(
           step = 1, 
           value = 6, 
           label = "Mês",
-          sep = "", animate = TRUE
-        ),
-        
-        # Select municipality
-        selectizeInput(
-          inputId = "mun", 
-          label = "Município", 
-          choices = NULL
+          sep = "", 
+          animate = TRUE
         )
       ),
 
+      # Map card
       card(
         full_screen = TRUE,
         card_body(
@@ -87,16 +128,28 @@ ui <- page_navbar(
 
     )
   ),
+
+  # Graphs page
   nav_panel(
     title = "Gráficos",
 
     layout_sidebar(
       sidebar = sidebar(
+        # Select municipality
+        selectizeInput(
+          inputId = "mun", 
+          label = "Município", 
+          choices = NULL
+        ),
+
+        # Select health indicator
         selectInput(
           inputId = "health_indi",
           label = "Indicador",
           choices = c("Taxa de internação por asma", "Taxa de internação por dengue", "Taxa de internação por diarréia")
         ),
+
+        # Select age group
         selectInput(
           inputId = "age_group",
           label = "Faixa etária",
@@ -104,11 +157,53 @@ ui <- page_navbar(
         )
       ),
 
+      # Graphs card
       card(
+        full_screen = TRUE,
         card_header("Saúde"),
         card_body(
           vchartr::vchartOutput(outputId = "graph_health")
         )
+      )
+    )
+  ),
+
+  # About page
+  nav_panel(
+    title = "Conceitos e definições",
+    card(
+      card_header("Seca e saúde"),
+      p("A seca é um fenômeno climático que, além de afetar a produção agrícola e o abastecimento de água, representa uma grave ameaça à saúde humana. A escassez de água potável compromete o acesso a condições mínimas de higiene e saneamento, aumentando o risco de doenças infecciosas e parasitárias, como a diarreia. A redução de umidade no ar e a queima de vegetação durante períodos de seca contribuem para a poluição atmosférica, agravando problemas respiratórios, como asma. Além disso, o armazenamento de água em recipientes inapropriados, como galões e tonéis sem tampa, contribui para a proliferação de mosquitos que podem transmitir a dengue."),
+      p("Este painel interativo de visualização tem por objetivo apresentar indicadores relacionados a seca e saúde na região do semiárido brasileiro."),
+      p("O projeto é desenvolvido e mantido pela equipe do Observatório de Clima e Saúde, do Instituto de Comunicação e Informação em Saúde (ICICT) da Fundação Oswaldo Cruz (Fiocruz).")
+    ),
+    accordion(
+      multiple = FALSE,
+      accordion_panel(
+        "Precipitação",
+        p("Volume médio mensal de chuva em mm nos municípios."),
+        p("Fonte: ???")
+      ),
+      accordion_panel(
+        "NDVI",
+        p("Índice de estado da vegetação, que indica a produção primária (produção de clorofila) e umidade local por meio de um indicador numérico obtido por sensoriamento remoto."),
+        p("Os valores de NDVI variam entre -1.0 e +1.0. Observa-se pela sua definição matemática que o NDVI de uma área contendo uma vegetação densa típica de florestas temperadas e tropicais tende a ter valores positivos altos entre 0.5 e 1.0. Grama e vegetação esparsa possuem valores positivos mais baixos, aproximadamente entre 0.2 e 0.5, enquanto solos expostos possuem valores ainda mais baixos entre 0.1 e 0.2, podendo alcançar valores negativos dependendo do tipo de solo. As nuvens apresentam valores próximos de zero. No caso de corpos de água, o NDVI apresenta valores negativos. A interpretação dos valores adquiridos atraves do NDVI pode auxiliar na identificação de áreas de seca e areas sujeitas a queimadas."),
+        p("Fonte: ???")
+      ),
+      accordion_panel(
+        "Taxa de internação por asma",
+        p("Internações por asma na população residente em determinado espaço geográfico, no período considerado, por 100.000 habitantes."),
+        p("Fonte: Sistema de Informações Hospitalares do SUS - SIH, DataSUS, Ministério da Saúde.")
+      ),
+      accordion_panel(
+        "Taxa de internação por dengue",
+        p("Casos de dengue na população residente em determinado espaço geográfico, no período considerado, por 100.000 habitantes."),
+        p("Fonte: Sistema de Informações de Agravos de Notificação - SINAN, DataSUS, Ministério da Saúde.")
+      ),
+      accordion_panel(
+        "Taxa de internação por diarréia",
+        p("Internações por diarréia e gastroenterite com origem de infecção presumível em determinado espaço geográfico, no período considerado, por 100.000 habitantes."),
+        p("Fonte: Sistema de Informações Hospitalares do SUS - SIH, DataSUS, Ministério da Saúde.")
       )
     )
   )
@@ -145,32 +240,32 @@ server <- function(input, output, session) {
     }
   })
 
-  # Map render
+  # Map render (initial, updated with leafletProxy)
   output$out_map <- renderLeaflet(
     if(input$indicator == "Precipitação"){
       leaflet() |>
         addTiles() |>
-        addPolygons(data = geo, fill = "", stroke = "") |>
-          addLegend(
-            layerId = "legend",
-            position = 'topright',
-            colors = c("#2C7BB6","#ABD9E9", "#FFFFBF", "#FDAE61", "#D7191C"),
-            labels = c("muito úmido","úmido",
-                       "seco","muito seco","extremamente seco"), opacity = 0.5,
-            title = "Precipitação"
-          )
+        setView(lng = -40.5, -10.4, zoom = 6) |>
+        addLegend(
+          layerId = "legend",
+          position = 'topright',
+          colors = c("#2C7BB6","#ABD9E9", "#FFFFBF", "#FDAE61", "#D7191C"),
+          labels = c("úmido","","","","seco"), 
+          opacity = 0.5,
+          title = "Precipitação"
+        )
     } else if(input$indicator == "NDVI"){
       leaflet() |>
         addTiles() |>
-        addPolygons(data = geo, fill = "", stroke = "") |>
-          addLegend(
-            layerId = "legend",
-            position = 'topright',
-            colors = c("#2C7BB6","#ABD9E9", "#FFFFBF", "#FDAE61", "#D7191C"),
-            labels = c("muito úmido","úmido",
-                       "seco","muito seco","extremamente seco"), opacity = 0.5,
-            title = "NDVI"
-          )
+        setView(lng = -40.5, -10.4, zoom = 6) |>
+        addLegend(
+          layerId = "legend",
+          position = 'topright',
+          colors = c("#35a328", "#a5fd61", "#f3fd61", "#d8953d", "#d83d40"),
+          labels = c("úmido","","","","seco"), 
+          opacity = 0.5,
+          title = "NDVI"
+        )
     }
     
   )
@@ -197,7 +292,7 @@ server <- function(input, output, session) {
         )
     } else if(input$indicator == "NDVI"){
       ndvi_pal <- colorNumeric(
-        palette = prec_ramp,
+        palette = ndvi_ramp,
         domain = geo_data()$value, 
         n = 10
       )

@@ -13,8 +13,11 @@ library(leaflet)
 # Load base map geometry
 geo <- readRDS("data/geo.rds")
 
-# Load precipiatation data
+# Load precipitation data
 prec <- readRDS("data/prec.rds")
+
+# Load NDVI data
+ndvi <- readRDS("data/ndvi.rds")
 
 # Load health data
 health <- readRDS("data/health.rds")
@@ -36,7 +39,7 @@ ui <- page_navbar(
     selectizeInput(
       inputId = "indicator", 
       label = "Indicador de seca",
-      choices = "Precipitação"
+      choices = c("Precipitação", "NDVI")
     ),
 
     # Select year
@@ -121,7 +124,15 @@ server <- function(input, output, session) {
           month == input$month
         )
       
-      inner_join(geo, prec_subset, by = "cod_mun")
+      left_join(geo, prec_subset, by = "cod_mun")
+    } else if (input$indicator == "NDVI"){
+      ndvi_subset <- ndvi |>
+        filter(
+          year == input$year,
+          month == input$month
+        )
+      
+      left_join(geo, ndvi_subset, by = "cod_mun")
     }
   })
 
@@ -139,6 +150,18 @@ server <- function(input, output, session) {
                        "seco","muito seco","extremamente seco"), opacity = 0.5,
             title = "Precipitação"
           )
+    } else if(input$indicator == "NDVI"){
+      leaflet() |>
+        addTiles() |>
+        addPolygons(data = geo, fill = "", stroke = "") |>
+          addLegend(
+            layerId = "legend",
+            position = 'topright',
+            colors = c("#2C7BB6","#ABD9E9", "#FFFFBF", "#FDAE61", "#D7191C"),
+            labels = c("muito úmido","úmido",
+                       "seco","muito seco","extremamente seco"), opacity = 0.5,
+            title = "NDVI"
+          )
     }
     
   )
@@ -146,13 +169,14 @@ server <- function(input, output, session) {
   # Update map
   observeEvent(geo_data(), {
     if(input$indicator == "Precipitação"){
-      prec_pal <- colorQuantile(
+      prec_pal <- colorNumeric(
         palette = prec_ramp,
         domain = geo_data()$value, 
         n = 10
       )
 
       leafletProxy("out_map", session) |>
+        leaflet::clearShapes() |>
         addPolygons(
           data = geo_data(),
           fillColor = ~prec_pal(value),
@@ -160,6 +184,24 @@ server <- function(input, output, session) {
           color = "white",
           fillOpacity = .5, 
           label = ~glue("{name_mun} - {name_uf}: {round(value, 2)} mm"),
+          layerId = ~cod_mun
+        )
+    } else if(input$indicator == "NDVI"){
+      ndvi_pal <- colorNumeric(
+        palette = prec_ramp,
+        domain = geo_data()$value, 
+        n = 10
+      )
+
+      leafletProxy("out_map", session) |>
+        leaflet::clearShapes() |>
+        addPolygons(
+          data = geo_data(),
+          fillColor = ~ndvi_pal(value),
+          weight = .5,
+          color = "white",
+          fillOpacity = .5, 
+          label = ~glue("{name_mun} - {name_uf}: {round(value, 2)}"),
           layerId = ~cod_mun
         )
     }
@@ -199,6 +241,15 @@ server <- function(input, output, session) {
           mutate(
             yearmonth = paste0(year, str_pad(month, 2, pad = "0")),
             indi = "Precipitação" 
+          )
+    } else if(input$indicator == "NDVI"){
+      indi_subset <- ndvi |>
+        filter(
+          cod_mun == input$mun
+        ) |>
+          mutate(
+            yearmonth = paste0(year, str_pad(month, 2, pad = "0")),
+            indi = "NDVI" 
           )
     }
 

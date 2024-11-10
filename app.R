@@ -9,6 +9,10 @@ library(sf)
 library(lubridate)
 library(vchartr)
 library(leaflet)
+# remotes::install_github("JohnCoene/typedjs")
+library(typedjs)
+library(rpcdas)
+source("pcdas_token.R", local = TRUE)
 
 # Load base map geometry
 geo <- readRDS("data/geo.rds")
@@ -114,7 +118,10 @@ ui <- page_navbar(
           label = "Mês",
           sep = "", 
           animate = TRUE
-        )
+        ),
+
+        # IA button
+        input_task_button(id = "ia_map", label = "", icon = fontawesome::fa_i("fas fa-wand-magic-sparkles"), label_busy = "Carregando IA PCDaS...")
       ),
 
       # Map card
@@ -272,6 +279,7 @@ server <- function(input, output, session) {
 
   # Update map
   observeEvent(geo_data(), {
+
     if(input$indicator == "Precipitação"){
       prec_pal <- colorQuantile(
         palette = prec_ramp,
@@ -309,6 +317,37 @@ server <- function(input, output, session) {
           layerId = ~cod_mun
         )
     }
+  })
+
+  # IA map
+  observeEvent(input$ia_map, {
+
+    tmp <- geo_data() |>
+      select(name_mun, name_uf, value) |>
+      st_drop_geometry() |>
+      mutate(value = round(value, 2))
+
+    tryCatch({
+      res_ia <- get_text_description(
+        df = tmp, 
+        prompt = "Este arquivo json contêm dados de precipitação na região semiárida brasileiral. A variável `name_mun` contêm os nomes dos municípios. A variável `name_uf` contêm os nomes dos estados dos municípios. A variavel `value` apresent o dado de precipitação em milimetros. Escreva um parágrafo técnico em português sobre os dados, incluindo valores e coloque em negrito os nomes dos municípios citados. Não mencione o nome do arquivo. Evite adjetivos como alarmante e preocupante.",
+        pcdas_token = pcdas_token
+      )
+    }, error = function(e){
+      res_ia <- ""
+    })
+    
+    showModal(modalDialog(
+      title = tags$img(src = "image_IA_PCDaS.png", style = "width: 20%; padding: 0;"),
+      tagList(
+        tags$html(typedjs::typed(markdown(trimws(res_ia)), contentType = "html", showCursor = FALSE))
+        # tags$img(src = "image_IA_PCDaS.png", style = "width: 20%; padding: 0;"),
+      ),
+      size = "l",
+      easyClose = TRUE,
+      fade = TRUE,
+      footer = modalButton("Fechar")
+    ))
   })
 
   # Select municipality
@@ -358,9 +397,37 @@ server <- function(input, output, session) {
     }
 
     bind_rows(health_subset, indi_subset) |>
+      rename(Valor = value) |>
       vchart() |>
-      v_line(aes(x = yearmonth, y = value)) |>
-      v_facet_wrap(vars(indi), ncol = 1, scales = "free_y")
+      v_line(aes(x = yearmonth, y = Valor)) |>
+      v_facet_wrap(vars(indi), ncol = 1, scales = "free_y") |>
+        v_specs_crosshair(
+          xField = list(
+            visible = TRUE,
+            line = list(type = "rect"), 
+            defaultSelect = list(
+              axisIndex = 0, 
+              datum = "201201"
+            ), 
+            label = list(visible = FALSE)
+          ), 
+          yField = list(
+            visible = TRUE, 
+            defaultSelect = list(
+              axisIndex = 1,
+              datum = 100
+            ), 
+            line = list(
+              style = list(
+                lineWidth = 1, 
+                opacity = 1, 
+                stroke = "#000", 
+                lineDash = c(2, 2)
+              )
+            ),
+            label = list(visible = FALSE)
+          )
+        )
     
   })
 

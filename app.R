@@ -341,7 +341,6 @@ server <- function(input, output, session) {
       title = tags$img(src = "image_IA_PCDaS.png", style = "width: 20%; padding: 0;"),
       tagList(
         tags$html(typedjs::typed(markdown(trimws(res_ia)), contentType = "html", showCursor = FALSE))
-        # tags$img(src = "image_IA_PCDaS.png", style = "width: 20%; padding: 0;"),
       ),
       size = "l",
       easyClose = TRUE,

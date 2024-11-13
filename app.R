@@ -152,7 +152,7 @@ ui <- page_navbar(
         # Select health indicator
         selectInput(
           inputId = "health_indi",
-          label = "Indicador",
+          label = "Indicador de saúde",
           choices = c("Taxa de internação por asma", "Taxa de internação por dengue", "Taxa de internação por diarréia")
         ),
 

@@ -50,3 +50,6 @@ rsconnect/
 
 # PCDaS token
 pcdas_token.R
+
+# Data
+data/

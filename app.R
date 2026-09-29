@@ -327,15 +327,25 @@ server <- function(input, output, session) {
       st_drop_geometry() |>
       mutate(value = round(value, 2))
 
-    tryCatch({
-      res_ia <- get_text_description(
+    res_ia <- tryCatch({
+      get_text_description(
         df = tmp, 
         prompt = "Este arquivo json contêm dados de precipitação na região semiárida brasileiral. A variável `name_mun` contêm os nomes dos municípios. A variável `name_uf` contêm os nomes dos estados dos municípios. A variavel `value` apresent o dado de precipitação em milimetros. Escreva um parágrafo técnico em português sobre os dados, incluindo valores e coloque em negrito os nomes dos municípios citados. Não mencione o nome do arquivo. Evite adjetivos como alarmante e preocupante.",
         pcdas_token = pcdas_token
       )
     }, error = function(e){
-      res_ia <- ""
+      message("Erro ao consultar a IA PCDaS: ", conditionMessage(e))
+      NULL
     })
+
+    if (!is.character(res_ia) || length(res_ia) != 1L ||
+        is.na(res_ia) || !nzchar(trimws(res_ia))) {
+      showNotification(
+        "Não foi possível consultar a IA PCDaS. Tente novamente em instantes.",
+        type = "error"
+      )
+      return()
+    }
     
     showModal(modalDialog(
       title = tags$img(src = "image_IA_PCDaS.png", style = "width: 20%; padding: 0;"),

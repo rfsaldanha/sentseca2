@@ -25,7 +25,8 @@ if (is.null(dataset)) {
   default_indicator <- indicators$indicator_id[1]
   mun_choices <- setNames(geo$cod_mun, paste(geo$name_mun, "–", geo$name_uf))
   climate_choices <- setNames(climate_names$name, paste0(climate_names$label, " (", climate_names$unit, ")"))
-  ai_available <- requireNamespace("rpcdas", quietly = TRUE) && file.exists("pcdas_token.R")
+  ai_available <- all(vapply(c("httr2", "promises", "typedjs"), requireNamespace, logical(1), quietly = TRUE)) &&
+    utils::packageVersion("httr2") >= "1.3.0" && file.exists("pcdas_token.R")
   ui <- page_navbar(title = "Saúde no Semiárido", theme = bs_theme(bootswatch = "flatly"),
     nav_panel("Mapa", layout_sidebar(
       sidebar = sidebar(
@@ -33,7 +34,8 @@ if (is.null(dataset)) {
         selectInput("year", "Ano", sort(unique(dataset$climate$coverage$year)), max(dataset$climate$coverage$year)),
         selectInput("month", "Mês", setNames(1:12, c("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")), 12),
         textOutput("climate_info"),
-        if (ai_available) actionButton("ia_map", "IA PCDaS")
+        if (ai_available) input_task_button("ia_map", "IA PCDaS", icon = icon("wand-magic-sparkles"),
+          label_busy = "Carregando IA PCDaS...", icon_busy = icon("spinner", class = "fa-spin"))
       ), card(full_screen = TRUE, leafletOutput("out_map", height = "75vh")))),
     nav_panel("Gráficos", layout_sidebar(
       sidebar = sidebar(
@@ -175,7 +177,7 @@ if (is.null(dataset)) {
     output$indicator_definitions <- renderTable({
       data.frame(Indicador = indicators$indi, Definição = indicators$definition, Fonte = indicators$source, check.names = FALSE)
     })
-    if (ai_available) register_ai_observer(input, session, map_data, climate_names)
+    if (ai_available) register_ai_observer(input, output, session, map_data, climate_names)
   }
 }
 shinyApp(ui, server)

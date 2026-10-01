@@ -42,7 +42,7 @@ tryCatch({
   select("mun", mun); select("health_indi", "sinan_dengue"); select("age_group", "Total")
   wait_for("document.getElementById('health_info').textContent.includes('SINAN-DENGUE')", "indicator change")
   select("measure", "count")
-  wait_for("document.getElementById('health_info').textContent.includes('SINAN-DENGUE') && document.getElementById('graph_health').data && document.getElementById('graph_health').data.length >= 2 && document.getElementById('graph_health').data[0].name.includes('Casos prováveis')", "dengue graph")
+  wait_for("document.getElementById('health_info').textContent.includes('SINAN-DENGUE') && document.getElementById('graph_health').data && document.getElementById('graph_health').data.length >= 2 && document.getElementById('graph_health').data[0].name.includes('Casos confirmados')", "dengue graph")
   wait_for("document.getElementById('graph_health')._fullLayout.yaxis.title.text === 'Número de eventos'", "count axis")
   stopifnot(js("document.getElementById('measure').value") == "count")
   stopifnot(isTRUE(js("document.getElementById('graph_health').data[0].connectgaps === false")))

@@ -62,7 +62,9 @@ para a versão desejada. Não altere arquivos dentro das publicações.
 - TerraClimate: 12 indicadores mensais, com unidades e períodos nos metadados.
 - SIH/SUS: internações financiadas pelo SUS, por residência, diagnóstico principal
   e data de internação; SIM: óbitos por causa básica e data do óbito.
-- Dengue: casos prováveis por residência e início dos sintomas.
+- Dengue: casos confirmados pela classificação final do SINAN, por residência e
+  início dos sintomas. Inclui os códigos históricos `1–4` e atuais `10–12`; exclui
+  descartados, inconclusivos, ignorados, classificação ausente e chikungunya.
 - Taxas mensais: eventos divididos pela população anual compatível, multiplicados
   por 100 mil. Não há anualização ou extrapolação de população.
 - Idade ignorada integra as contagens e o total, sem taxa específica. Ausências
@@ -77,7 +79,7 @@ O modal abre imediatamente com spinners no botão e na janela. A consulta ocorre
 em segundo plano, mantendo o painel disponível, com limite de espera de 60
 segundos e uma mensagem específica quando esse limite é atingido.
 
-A IA recebe todos os registros municipais do indicador e período selecionados,
+No mapa, a IA recebe todos os registros municipais do indicador e período selecionados,
 com nome do município, estado e valor, preservando a precisão numérica. Registros
 sem observação também são enviados, com valor nulo; ausências não são convertidas
 em zero. A IA é instruída a responder em até 120 palavras, apresentar os valores
@@ -85,22 +87,38 @@ do indicador e as estatísticas com duas casas decimais e vírgula decimal, e ma
 anos e contagens como inteiros. O arredondamento é solicitado apenas na
 apresentação, preservando a precisão original nos cálculos. A resposta aparece
 com efeito de digitação e nomes em negrito. Até 24 respostas válidas são reutilizadas
-na mesma sessão para dados e seleções idênticos; erros não são armazenados. Sem
-observações válidas, nenhuma consulta é feita.
+por botão na mesma sessão para dados e seleções idênticos; erros não são armazenados.
+Sem observações válidas, nenhuma consulta é feita.
+
+Na aba **Gráficos**, o botão **IA PCDaS** interpreta em conjunto as séries de saúde e
+clima exibidas para o município selecionado. A consulta inclui todos os meses das
+duas séries, alinhados por data, sem cortar seus períodos exclusivos, com valores
+originais, contagens, denominadores e marcas de cobertura e dados preliminares.
+O contexto informa município, indicadores, fontes, unidades, faixa etária e medida.
+O ano e o mês do mapa não limitam as séries enviadas.
+
+O prompt solicita até 180 palavras sobre a evolução, sazonalidade, picos e
+coincidências ou divergências entre as séries, respeitando as escalas e comparando
+somente meses com observações nas duas. Proíbe inferir causalidade ou inventar
+estatísticas, preserva lacunas e aplica a mesma apresentação decimal do mapa.
+Se uma série estiver indisponível ou houver menos de dois meses com observações
+nas duas, o modal explica a limitação sem consultar a API. A seleção é capturada
+no clique, e cada botão mantém sua própria consulta e cache.
 
 ## Verificação
 
 ```sh
 Rscript tests/test-data-access.R
 Rscript tests/test-ia-map.R
+Rscript tests/test-ia-series.R
 Rscript tests/test-ia-http.R
 Rscript tests/smoke.R
 /usr/bin/time -v Rscript tests/benchmark.R
 ```
 
-Os dois primeiros usam fixtures de teste e respostas simuladas, sem credenciais
-ou chamadas à IA. O teste HTTP usa um servidor local e verifica respostas e
-tempo limite reais, sem acessar a PCDaS; requer callr. Os demais exigem uma
+Os testes de acesso a dados e de IA do mapa e das séries usam fixtures de teste e
+respostas simuladas, sem credenciais ou chamadas à IA. O teste HTTP usa um servidor
+local e verifica respostas e tempo limite reais, sem acessar a PCDaS; requer callr. Os demais exigem uma
 publicação preparada: verificam seletores,
 consultas, taxas, lacunas, municípios e a ausência de leitura integral de saúde na
 abertura. O benchmark registra tempo de inicialização e consulta; `time -v`
@@ -113,9 +131,10 @@ confere os polígonos e as trocas de seleção, sem acionar a IA. As capturas fi
 
 `Rscript tests/browser-ia.R` abre sua própria instância do painel e verifica o
 ícone, os spinners, a digitação, o negrito, o reaproveitamento de respostas e
-novas tentativas após falhas usando
-respostas simuladas com atraso, sem ler credenciais nem consultar a API. Requer
-também callr e grava `ia-loading.png` e `ia-response.png` em `data/diagnostics/`.
+novas tentativas após falhas nos dois botões. Também verifica taxas indisponíveis
+na análise conjunta. Usa respostas simuladas com atraso, sem ler credenciais nem
+consultar a API. Requer também callr e grava capturas dos modais do mapa e das
+séries em `data/diagnostics/`.
 
 Medição local em 01/10/2026, com a publicação `20260930T200759-1243406`
 (41.542.102 registros de saúde):

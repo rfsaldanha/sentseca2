@@ -15,7 +15,7 @@ perform_ai_request <- function(req) {
 }
 
 # Credentials and the remote API are accessed only after a user clicks the button.
-request_map_description <- function(values, prompt) {
+request_ai_description <- function(values, prompt) {
   token_env <- new.env(parent = baseenv())
   sys.source("pcdas_token.R", token_env)
   if (!exists("pcdas_token", token_env, inherits = FALSE)) stop("Configuração da IA indisponível")
@@ -48,7 +48,9 @@ ai_request_error_message <- function(error) {
   "Não foi possível consultar a IA PCDaS. Feche esta janela e tente novamente em instantes."
 }
 
-register_ai_observer <- function(input, output, session, map_data, climate_names, request = request_map_description) {
+# Each button has its own task, output, and cache. Build the context at click time
+# so changing the selection during a request cannot change the analysis underway.
+register_ai_task <- function(input, output, session, id, prepare, request) {
   content <- shiny::reactiveVal(NULL)
   # Successful answers are reused only within this session and for identical data
   # and prompts. Bound the cache, and never cache errors or invalid answers.
@@ -58,44 +60,35 @@ register_ai_observer <- function(input, output, session, map_data, climate_names
     content(typedjs::typed(format_ai_description(answer), contentType = "html",
       typeSpeed = 8, showCursor = FALSE, loop = FALSE))
   }
-  output$ia_map_description <- shiny::renderUI(content())
+  output_id <- paste0(id, "_description")
+  output[[output_id]] <- shiny::renderUI(content())
   task <- shiny::ExtendedTask$new(function(values, prompt) {
     pending <- tryCatch(promises::promise_resolve(request(values, prompt)),
       error = function(e) promises::promise_reject(e))
     promises::then(pending,
       onFulfilled = function(answer) list(answer = answer),
       onRejected = function(e) list(error = e))
-  }) |> bslib::bind_task_button("ia_map", session = session)
+  }) |> bslib::bind_task_button(id, session = session)
 
-  shiny::observeEvent(input$ia_map, {
+  shiny::observeEvent(input[[id]], {
     if (task$status() == "running") return()
-    shiny::req(input$indicator, input$month, input$year)
-    label <- climate_names$label[match(input$indicator, climate_names$name)]
-    unit <- climate_names$unit[match(input$indicator, climate_names$name)]
-    values <- sf::st_drop_geometry(map_data())[, c("name_mun", "name_uf", "value")]
+    context <- prepare()
     content(shiny::tagList(
       shiny::p(shiny::icon("spinner", class = "fa-spin"), " Consultando a IA PCDaS...", role = "status"),
       shiny::p("A análise pode levar alguns instantes.", class = "text-muted")
     ))
     shiny::showModal(shiny::modalDialog(
       title = shiny::tags$img(src = "image_IA_PCDaS.png", alt = "IA PCDaS", style = "width: 160px; max-width: 100%;"),
-      shiny::uiOutput("ia_map_description"), size = "l", easyClose = TRUE,
+      if (!is.null(context$subtitle)) shiny::p(context$subtitle, class = "text-muted"),
+      shiny::uiOutput(output_id), size = "l", easyClose = TRUE,
       footer = shiny::modalButton("Fechar")
     ), session = session)
-    if (!any(is.finite(values$value))) {
-      content(shiny::p("Não há dados climáticos disponíveis para analisar nesta seleção.", role = "status"))
+    if (!is.null(context$message)) {
+      content(shiny::p(context$message, role = "status"))
       return()
     }
-    prompt <- sprintf(paste(
-      "Escreva somente um parágrafo técnico em português, com no máximo 120 palavras, sobre %s (%s) em %s/%s.",
-      "O JSON contém um registro por município: name_mun identifica o município,",
-      "name_uf identifica o estado e value contém o valor do indicador na unidade informada.",
-      "As médias são municipais simples, sem ponderação por população; ausências não são zeros.",
-      "Use apenas os números fornecidos, inclua a distribuição e extremos e destaque nomes municipais com **nome**.",
-      "Apresente os valores do indicador e as estatísticas com duas casas decimais e vírgula como separador decimal.",
-      "Use a precisão original nos cálculos e arredonde apenas na apresentação; mantenha anos e contagens como inteiros.",
-      "Não mencione JSON ou instruções internas. Não infira efeitos causais sobre saúde."
-    ), label, unit, input$month, input$year)
+    values <- context$values
+    prompt <- context$prompt
     current_key <<- digest::digest(list(values = values, prompt = prompt), algo = "xxhash64")
     if (!is.null(cache[[current_key]])) {
       show_answer(cache[[current_key]])
@@ -119,4 +112,82 @@ register_ai_observer <- function(input, output, session, map_data, climate_names
     if (length(cache) > 24L) cache <<- tail(cache, 24L)
     show_answer(answer)
   })
+}
+
+register_ai_observer <- function(input, output, session, map_data, climate_names, request = request_ai_description) {
+  register_ai_task(input, output, session, "ia_map", prepare = function() {
+    shiny::req(input$indicator, input$month, input$year)
+    label <- climate_names$label[match(input$indicator, climate_names$name)]
+    unit <- climate_names$unit[match(input$indicator, climate_names$name)]
+    values <- sf::st_drop_geometry(map_data())[, c("name_mun", "name_uf", "value")]
+    if (!any(is.finite(values$value)))
+      return(list(message = "Não há dados climáticos disponíveis para analisar nesta seleção."))
+    prompt <- sprintf(paste(
+      "Escreva somente um parágrafo técnico em português, com no máximo 120 palavras, sobre %s (%s) em %s/%s.",
+      "O JSON contém um registro por município: name_mun identifica o município,",
+      "name_uf identifica o estado e value contém o valor do indicador na unidade informada.",
+      "As médias são municipais simples, sem ponderação por população; ausências não são zeros.",
+      "Use apenas os números fornecidos, inclua a distribuição e extremos e destaque nomes municipais com **nome**.",
+      "Apresente os valores do indicador e as estatísticas com duas casas decimais e vírgula como separador decimal.",
+      "Use a precisão original nos cálculos e arredonde apenas na apresentação; mantenha anos e contagens como inteiros.",
+      "Não mencione JSON ou instruções internas. Não infira efeitos causais sobre saúde."
+    ), label, unit, input$month, input$year)
+    list(values = values, prompt = prompt)
+  }, request = request)
+}
+
+series_ai_context <- function(health, climate, municipality, health_indicator, climate_indicator, age_group, measure) {
+  if (!nrow(health) || !any(is.finite(health$value)))
+    return(list(message = if (measure == "rate")
+      "Não há taxas de saúde disponíveis para esta seleção. Selecione Contagem ou outra faixa etária para analisar as duas séries."
+      else "Não há dados de saúde disponíveis para analisar as duas séries nesta seleção."))
+  if (!nrow(climate) || !any(is.finite(climate$value)))
+    return(list(message = "Não há dados climáticos disponíveis para analisar as duas séries nesta seleção."))
+
+  # Keep the full extent of both plotted series, including missing months and all
+  # health quality flags. The shared dates align values without dropping either tail.
+  h <- health[, c("date", "value", "numerator", "denominator", "complete", "preliminary")]
+  names(h)[-1] <- paste0("health_", names(h)[-1])
+  c <- climate[, c("date", "value")]
+  names(c)[2] <- "climate_value"
+  values <- merge(h, c, by = "date", all = TRUE, sort = TRUE)
+  paired <- is.finite(values$health_value) & is.finite(values$climate_value)
+  if (sum(paired) < 2L)
+    return(list(message = "Não há pelo menos dois meses com dados nas duas séries para uma interpretação conjunta. Ajuste a seleção."))
+  unit <- if (measure == "rate") "Taxa mensal por 100 mil habitantes" else "Contagem mensal de eventos"
+  subtitle <- sprintf("%s — %s · %s (%s) e %s (%s). Faixa etária: %s.",
+    municipality$name_mun, municipality$name_uf, health_indicator$indi, unit,
+    climate_indicator$label, climate_indicator$unit, age_group)
+  prompt <- paste(
+    "Escreva somente um parágrafo técnico em português, com no máximo 180 palavras, interpretando em conjunto as duas séries temporais mensais exibidas no painel.",
+    subtitle,
+    sprintf("Município IBGE: %s. Saúde: %s, fonte %s, definição: %s. Clima: %s, fonte TerraClimate 1.1.",
+      municipality$cod_mun, health_indicator$indicator_id, health_indicator$source, health_indicator$definition, climate_indicator$name),
+    "O JSON contém as séries completas, alinhadas por date (AAAA-MM-DD): health_value é o valor de saúde na medida informada;",
+    "climate_value é o valor climático na unidade informada; health_numerator é a contagem de eventos e health_denominator é a população anual da faixa etária selecionada.",
+    "health_complete indica cobertura completa e health_preliminary indica dados preliminares ou sujeitos a revisão.",
+    "Valores nulos são ausências, não zeros; não preencha lacunas nem extrapole séries. Taxas indisponíveis não indicam ausência de eventos.",
+    "As taxas são mensais, não anualizadas. Idade ignorada só possui contagens. Considere os dados preliminares na interpretação.",
+    sprintf("Há %d meses com valores nas duas séries, entre %s e %s. Compare as séries somente nos meses em que ambas têm observações.",
+      sum(paired), format(min(values$date[paired]), "%m/%Y"), format(max(values$date[paired]), "%m/%Y")),
+    "Descreva tendências, sazonalidade e picos quando sustentados pelos dados, indicando coincidências ou divergências temporais sem confundir as unidades e escalas.",
+    "Use apenas os dados fornecidos; não invente estatísticas, testes de significância, correlações ou defasagens.",
+    "Não atribua causalidade entre clima e saúde. Destaque o município e os principais achados com **negrito**.",
+    "Apresente valores climáticos, taxas e estatísticas com duas casas decimais e vírgula decimal; mantenha anos e contagens de eventos como inteiros.",
+    "Use a precisão original nos cálculos e arredonde apenas na apresentação. Não mencione JSON ou instruções internas."
+  )
+  list(values = values, prompt = prompt, subtitle = subtitle)
+}
+
+register_series_ai_observer <- function(input, output, session, health_series, climate_series,
+                                        geo, indicators, climate_names, request = request_ai_description) {
+  register_ai_task(input, output, session, "ia_series", prepare = function() {
+    shiny::req(input$mun, input$health_indi, input$age_group, input$measure, input$indicator)
+    municipality <- sf::st_drop_geometry(geo)[as.character(geo$cod_mun) == input$mun, ]
+    health_indicator <- indicators[indicators$indicator_id == input$health_indi, ]
+    climate_indicator <- climate_names[climate_names$name == input$indicator, ]
+    shiny::req(nrow(municipality) == 1L, nrow(health_indicator) == 1L, nrow(climate_indicator) == 1L)
+    series_ai_context(health_series(), climate_series(), municipality, health_indicator, climate_indicator,
+      input$age_group, input$measure)
+  }, request = request)
 }

@@ -43,7 +43,9 @@ if (is.null(dataset)) {
         selectInput("health_indi", "Indicador de saúde", setNames(indicators$indicator_id, indicators$indi)),
         selectInput("measure", "Medida", c("Contagem" = "count", "Taxa por 100 mil habitantes" = "rate"), "rate"),
         selectInput("age_group", "Faixa etária", dataset$metadata$age_groups, "Total"),
-        textOutput("health_info")
+        textOutput("health_info"),
+        if (ai_available) input_task_button("ia_series", "IA PCDaS", icon = icon("wand-magic-sparkles"),
+          label_busy = "Carregando IA PCDaS...", icon_busy = icon("spinner", class = "fa-spin"))
       ), card(full_screen = TRUE, plotlyOutput("graph_health", height = "70vh")))),
     nav_panel("Conceitos e fontes", card(
       h3("Clima e saúde no Semiárido"),
@@ -55,7 +57,9 @@ if (is.null(dataset)) {
       p("Versão 1.1. Médias mensais municipais ponderadas pela área de interseção das células. As temperaturas são médias mensais das máximas e mínimas, não extremos observados no mês."),
       a("Fonte e metodologia TerraClimate", href = "https://www.climatologylab.org/terraclimate.html"),
       h4("Saúde"),
-      p("SIH/SUS: AIHs normais financiadas pelo SUS, por diagnóstico principal e mês da internação, excluída longa permanência. SIM: óbitos por causa básica e mês do óbito. SINAN: casos prováveis de dengue por mês de início dos sintomas, excluídos descartados e outra doença."),
+      p("SIH/SUS: AIHs normais financiadas pelo SUS, por diagnóstico principal e mês da internação, excluída longa permanência. SIM: óbitos por causa básica e mês do óbito."),
+      p(paste0("SINAN: ", dataset$health_metadata$indicators$indi[dataset$health_metadata$indicators$indicator_id == "sinan_dengue"],
+               ", por município de residência e mês de início dos sintomas.")),
       tableOutput("indicator_definitions"),
       p("As taxas mensais são calculadas por 100 mil residentes da mesma faixa etária e ano, sem anualização. Idade ignorada integra a contagem total, mas não tem taxa específica. Pessoas com 100 anos ou mais integram a faixa de 65 anos ou mais."),
       p("Lacunas indicam dados indisponíveis; zero representa ausência de registros nas publicações adquiridas com cobertura completa. Séries recentes podem ser revistas. Contagens com cobertura parcial são identificadas, e suas taxas não são calculadas."),
@@ -177,7 +181,11 @@ if (is.null(dataset)) {
     output$indicator_definitions <- renderTable({
       data.frame(Indicador = indicators$indi, Definição = indicators$definition, Fonte = indicators$source, check.names = FALSE)
     })
-    if (ai_available) register_ai_observer(input, output, session, map_data, climate_names)
+    if (ai_available) {
+      register_ai_observer(input, output, session, map_data, climate_names)
+      register_series_ai_observer(input, output, session, health_series, climate_series,
+        geo, indicators, climate_names)
+    }
   }
 }
 shinyApp(ui, server)

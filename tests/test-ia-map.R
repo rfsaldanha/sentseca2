@@ -169,12 +169,12 @@ test_that("the API adapter sends every municipal record, missing values, and ful
   values <- data.frame(name_mun = paste("Município de teste", seq_len(1500)),
     name_uf = rep(c("Estado de teste A", "Estado de teste B"), 750),
     value = rep(c(-4, 0, 10, 2, NA, 1.23456789012345), 250))
-  adapter_env <- new.env(parent = environment(request_map_description))
+  adapter_env <- new.env(parent = environment(request_ai_description))
   adapter_env$sys.source <- function(file, envir) {
     expect_identical(file, "pcdas_token.R")
     envir$pcdas_token <- "test-token"
   }
-  adapter <- request_map_description
+  adapter <- request_ai_description
   environment(adapter) <- adapter_env
   done <- FALSE
   actual <- NULL

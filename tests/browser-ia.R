@@ -12,10 +12,11 @@ app <- callr::r_bg(function(project, port, response) {
   env <- new.env()
   sys.source("app.R", env)
   stopifnot(!is.null(env$dataset), isTRUE(env$ai_available))
-  calls <- 0L
-  env$request_map_description <- function(values, prompt) {
-    calls <<- calls + 1L
-    attempt <- calls
+  calls <- c(map = 0L, series = 0L)
+  env$request_ai_description <- function(values, prompt) {
+    kind <- if ("climate_value" %in% names(values)) "series" else "map"
+    calls[kind] <<- calls[kind] + 1L
+    attempt <- calls[[kind]]
     promises::promise(function(resolve, reject) {
       later::later(function() {
         if (attempt == 2L) reject(simpleError("Simulated API failure")) else resolve(response)
@@ -111,9 +112,58 @@ tryCatch({
   wait_for("!document.getElementById('shiny-modal')", "pending modal closes")
   wait_for("!document.getElementById('ia_map').disabled", "background request completes")
   stopifnot(isTRUE(js("!document.getElementById('shiny-modal') && Shiny.shinyapp.isConnected()")))
+  # The series button uses the actual graph selection and its own output/cache.
+  js("Array.from(document.querySelectorAll('.nav-link')).find(x=>x.textContent.trim()==='Gráficos').click(); true")
+  js("document.getElementById('health_indi').selectize.setValue('sinan_dengue'); document.getElementById('measure').selectize.setValue('count'); true")
+  wait_for("document.getElementById('graph_health').data?.[0]?.name.includes('Casos confirmados')", "confirmed dengue series")
+  stopifnot(isTRUE(js("Boolean(document.querySelector('#ia_series .fa-wand-magic-sparkles'))")))
+  js("document.getElementById('ia_series').click(); true")
+  wait_for("Boolean(document.querySelector('#ia_series_description .fa-spin'))", "series spinner")
+  stopifnot(isTRUE(js("document.getElementById('ia_series').disabled && !document.getElementById('ia_map').disabled")))
+  stopifnot(isTRUE(js("document.getElementById('shiny-modal').textContent.includes('Casos confirmados de dengue')")))
+  stopifnot(isTRUE(js("getComputedStyle(document.querySelector('#ia_series_description .fa-spin')).animationName !== 'none'")))
+  b$screenshot(file.path(artifacts, "ia-series-loading.png"))
+  wait_for("Boolean(document.querySelector('#ia_series_description .typed')?.textContent.length)", "series typing starts")
+  stopifnot(js("document.querySelector('#ia_series_description .typed').textContent.length") < nchar(expected))
+  wait_for(sprintf("document.querySelector('#ia_series_description .typed')?.textContent === %s", jsonlite::toJSON(expected, auto_unbox = TRUE)), "series typing completes")
+  stopifnot(js("document.querySelector('#ia_series_description strong').textContent") == "Município de teste")
+  stopifnot(isTRUE(js("!document.getElementById('ia_series').disabled")))
+  b$screenshot(file.path(artifacts, "ia-series-response.png"))
+  js("document.querySelector('#shiny-modal .modal-footer button').click(); true")
+  wait_for("!document.getElementById('shiny-modal')", "series modal closes")
+  cached_started <- proc.time()[["elapsed"]]
+  js("document.getElementById('ia_series').click(); true")
+  wait_for("Boolean(document.querySelector('#ia_series_description .typed'))", "series cached answer")
+  stopifnot(proc.time()[["elapsed"]] - cached_started < 2)
+  stopifnot(js("document.querySelectorAll('#ia_series_description .fa-spin').length") == 0L)
+  wait_for("document.querySelector('#shiny-modal')?.dataset.testShown === 'true'", "series cached modal transition")
+  js("document.querySelector('#shiny-modal .modal-footer button').click(); true")
+  wait_for("!document.getElementById('shiny-modal')", "series cached modal closes")
+
+  js("document.getElementById('measure').selectize.setValue('rate'); document.getElementById('age_group').selectize.setValue('Idade ignorada'); true")
+  wait_for("document.getElementById('health_info').textContent.includes('Taxa indisponível para idade ignorada')", "unavailable series rate")
+  js("document.getElementById('ia_series').click(); true")
+  wait_for("document.querySelector('#ia_series_description')?.textContent.includes('Selecione Contagem')", "unavailable series message")
+  stopifnot(js("document.querySelectorAll('#ia_series_description .fa-spin').length") == 0L)
+  wait_for("!document.getElementById('ia_series').disabled", "unavailable series button ready")
+  wait_for("document.querySelector('#shiny-modal')?.dataset.testShown === 'true'", "unavailable series modal transition")
+  js("document.querySelector('#shiny-modal .modal-footer button').click(); true")
+  wait_for("!document.getElementById('shiny-modal')", "unavailable series modal closes")
+
+  js("document.getElementById('age_group').selectize.setValue('Total'); true")
+  wait_for("document.getElementById('health_info').textContent.includes('SINAN-DENGUE')", "series rate recovers")
+  js("document.getElementById('ia_series').click(); true")
+  wait_for("Boolean(document.querySelector('#ia_series_description .fa-spin'))", "changed series request")
+  wait_for("Boolean(document.querySelector('#ia_series_description [role=alert]'))", "series API error")
+  wait_for("!document.getElementById('ia_series').disabled", "series retry enabled")
+  js("document.querySelector('#shiny-modal .modal-footer button').click(); true")
+  wait_for("!document.getElementById('shiny-modal')", "series error modal closes")
+  js("document.getElementById('ia_series').click(); true")
+  wait_for("Boolean(document.querySelector('#ia_series_description .fa-spin'))", "series retry")
+  wait_for("Boolean(document.querySelector('#ia_series_description .typed'))", "series retry succeeds")
   stopifnot(length(js("window.__dashboardErrors")) == 0L)
   stopifnot(js("document.querySelectorAll('.shiny-output-error').length") == 0L)
-  cat("IA browser checks passed: icon, immediate modal, animated spinners, typed bold response, immediate cached answer, errors, retries, and closed modal stays closed.\n")
+  cat("IA browser checks passed for map and series: icons, immediate modals, animated spinners, typed bold responses, separate caches, unavailable rates, errors, retries, and closed modal stays closed.\n")
 }, finally = {
   if (!is.null(b)) b$close()
   if (!is.null(chrome)) chrome$close()

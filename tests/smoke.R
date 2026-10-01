@@ -42,6 +42,15 @@ tryCatch({
         expect_true(all(is.na(x$value[!eligible])))
       }
     })
+    test_that("dengue uses the confirmed-case definition from the publication", {
+      dengue <- env$dataset$health_metadata$indicators
+      dengue <- dengue[dengue$indicator_id == "sinan_dengue", ]
+      expect_identical(dengue$indi, "Casos confirmados de dengue")
+      definition <- env$dataset$health_metadata$dengue_case_definition
+      expect_identical(definition$type, "confirmed")
+      expect_identical(definition$field, "CLASSI_FIN")
+      expect_identical(definition$codes, c("1", "2", "3", "4", "10", "11", "12"))
+    })
     test_that("recent preliminary records and unavailable populations are explicit", {
       session$setInputs(health_indi = "sinan_dengue", measure = "count", age_group = "Total")
       counts <- health_series()
@@ -64,6 +73,28 @@ tryCatch({
       session$setInputs(measure = "count")
       expect_gt(nrow(health_series()), 0)
       expect_true(all(!is.na(health_series()$value)))
+    })
+    test_that("series AI receives the full plotted series and current metadata", {
+      skip_if_not(env$ai_available)
+      captured <- NULL
+      env$request_ai_description <- function(values, prompt) {
+        captured <<- list(values = values, prompt = prompt)
+        promises::promise_resolve("Resposta simulada para teste de integração.")
+      }
+      session$setInputs(indicator = "ppt", health_indi = "sinan_dengue", measure = "count", age_group = "Total")
+      h <- health_series(); c <- climate_series()
+      session$setInputs(ia_series = 1)
+      expect_false(is.null(captured))
+      expect_equal(captured$values$date, sort(unique(c(h$date, c$date))))
+      expect_equal(captured$values$health_value[match(h$date, captured$values$date)], h$value)
+      expect_equal(captured$values$climate_value[match(c$date, captured$values$date)], c$value)
+      expect_equal(captured$values$health_preliminary[match(h$date, captured$values$date)], h$preliminary)
+      expect_match(captured$prompt, env$geo$name_mun[env$geo$cod_mun == mun], fixed = TRUE)
+      expect_match(captured$prompt, "Casos confirmados de dengue", fixed = TRUE)
+      expect_match(captured$prompt, env$climate_names$label[env$climate_names$name == "ppt"], fixed = TRUE)
+      expect_match(captured$prompt, "Contagem mensal de eventos", fixed = TRUE)
+      for (i in seq_len(20L)) { later::run_now(0); session$flushReact() }
+      expect_match(output$ia_series_description$html, "typed html-widget")
     })
     test_that("new municipalities and missing selections do not close the session", {
       if (file.exists("data/geo.rds")) {

@@ -8,39 +8,26 @@ suppressPackageStartupMessages({
   library(testthat)
 })
 
-# Exercise the actual observer without production data, credentials or API calls.
-args <- commandArgs(trailingOnly = TRUE)
-app_file <- if (length(args)) args[[1]] else "app.R"
-app_code <- parse(app_file)
-server_assignment <- Filter(function(expr) {
-  is.call(expr) && identical(expr[[1]], as.name("<-")) &&
-    identical(expr[[2]], as.name("server"))
-}, as.list(app_code))[[1]]
-ia_observer <- Filter(function(expr) {
-  is.call(expr) && identical(expr[[1]], as.name("observeEvent")) &&
-    identical(expr[[2]], quote(input$ia_map))
-}, as.list(server_assignment[[3]][[3]]))
-stopifnot(length(ia_observer) == 1L)
+# Exercise the same observer as app.R without credentials or API calls.
+source("R/ai.R")
 
 state <- new.env()
 state$response <- simpleError("Simulated HTTP 422 from API")
 state$modals <- list()
 state$notifications <- list()
-get_text_description <- function(...) {
+request <- function(...) {
   if (inherits(state$response, "error")) stop(state$response)
   state$response
 }
-pcdas_token <- "test-token"
-clim_indi_names <- c("Indicador de teste" = "pdsi")
+climate_names <- data.frame(name = "pdsi", label = "Indicador de teste")
 
-test_server <- function(input, output, session) {}
-body(test_server) <- bquote({
-  geo_data <- reactive(data.frame(
+test_server <- function(input, output, session) {
+  map_data <- reactive(data.frame(
     name_mun = "Município de teste", name_uf = "Estado de teste", value = 1.25
   ))
   output$month_value <- renderText(input$month)
-  .(ia_observer[[1]])
-})
+  register_ai_observer(input, session, map_data, climate_names, request = request)
+}
 mock_session <- MockShinySession$new()
 mock_session$sendModal <- function(type, message) {
   state$modals <- append(state$modals, list(list(type = type, message = message)))
